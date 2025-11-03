@@ -32,32 +32,25 @@ lsb_position() {
     echo "$pos"
 }
 
-# Regex patterns
-MASK_PATTERN="^#define[[:space:]]*$FULL_REGISTER_NAME"_'([A-Z][A-Z0-9]*)[[:space:]]'
-MASK_LINE_PATTERN='\(uint(16|32)_t\)0x([0-9A-F]+)\)[[:space:]]*/\*!<(.*)\*/'
+# Regex to match lines like:
+# #define SPI_CR2_RXDMAEN ((uint8_t)0x01) /*!< Rx Buffer DMA Enable */
+REGEX='^#define[[:space:]]+('"$FULL_REGISTER_NAME"'_([A-Z0-9_]+))[[:space:]]+\(\(uint(8|16|32)_t\)\s*0x([0-9A-Fa-f]+)\)[[:space:]]*/\*!<(.*)\*/'
 
-# Collect bitfield records
 for LINE in "${FILE_LINES[@]}"; do
-    if [[ "$LINE" =~ $MASK_PATTERN ]]; then
-        FIELD_NAME="${BASH_REMATCH[1]}"
-        FULL_FIELD_NAME="${FULL_REGISTER_NAME}_${FIELD_NAME}"
+    if [[ "$LINE" =~ $REGEX ]]; then
+        FIELD_NAME="${BASH_REMATCH[2]}"
+        MASK_HEX="${BASH_REMATCH[4]}"
+        COMMENT="${BASH_REMATCH[5]}"
 
-        # Find full mask line
-        MATCH_LINE=$(printf "%s\n" "${FILE_LINES[@]}" | grep -E "^#define[[:space:]]*$FULL_FIELD_NAME[[:space:]].*\(uint(16|32)_t\)0x[0-9A-F]+\)[[:space:]]*/\*!<.*\*/" || true)
-        if [[ "$MATCH_LINE" =~ $MASK_LINE_PATTERN ]]; then
-            MASK_HEX="${BASH_REMATCH[2]}"
-            COMMENT="${BASH_REMATCH[3]}"
+        MASK_DEC=$((16#$MASK_HEX))
+        POS=$(lsb_position "$MASK_DEC")
+        SIZE=$(count_bits "$MASK_DEC")
 
-            MASK_DEC=$((16#$MASK_HEX))
-            POS=$(lsb_position "$MASK_DEC")
-            SIZE=$(count_bits "$MASK_DEC")
-
-            jq -n \
-                --arg name "$FIELD_NAME" \
-                --argjson pos "$POS" \
-                --argjson size "$SIZE" \
-                --arg comment "$COMMENT" \
-                '{Name: $name, Pos: $pos, FieldSize: $size, Comment: $comment}'
-        fi
+        jq -n \
+            --arg name "$FIELD_NAME" \
+            --argjson pos "$POS" \
+            --argjson size "$SIZE" \
+            --arg comment "$COMMENT" \
+            '{Name: $name, Pos: $pos, FieldSize: $size, Comment: $comment}'
     fi
 done | jq -s '.'

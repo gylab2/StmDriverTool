@@ -1,35 +1,18 @@
 #!/bin/bash
 
 # Usage:
-#   ./generate_registers.sh --device-name SPI1 < extended.json
+#   ./GenerateCode.sh < extended.json
 
 set -euo pipefail
 
-# Parse arguments
-PARSED=$(getopt --options="" --longoptions="device-name:" --name "$0" -- "$@")
-eval set -- "$PARSED"
+# Read input JSON
+INPUT_JSON=$(cat)
 
-DEVICE_NAME=""
+# Extract device name from JSON
+DEVICE_NAME=$(echo "$INPUT_JSON" | jq -r '.Device')
 
-while true; do
-    case "$1" in
-        --device-name)
-            DEVICE_NAME="$2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
-            ;;
-        *)
-            echo "Unknown option: $1" >&2
-            exit 1
-            ;;
-    esac
-done
-
-if [[ -z "$DEVICE_NAME" ]]; then
-    echo "Error: --device-name is required." >&2
+if [[ -z "$DEVICE_NAME" || "$DEVICE_NAME" == "null" ]]; then
+    echo "Error: Device name not found in input JSON." >&2
     exit 1
 fi
 
@@ -78,7 +61,7 @@ namespace LL
 EOF
 
 # Generate register classes
-jq -c '.[]' | while read -r REGISTER; do
+echo "$INPUT_JSON" | jq -c '.Registers[]' | while read -r REGISTER; do
     REG_NAME=$(echo "$REGISTER" | jq -r '.Name')
     REG_TYPE=$(echo "$REGISTER" | jq -r '.Type')
     BITTABLE=$(echo "$REGISTER" | jq -c '.BitTable')
